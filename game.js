@@ -30,10 +30,11 @@ let invulnerableUntil = 0;
 let joystickPointer = null;
 let input = { x: 0, y: 0 };
 
+// Игрок быстрый и послушный
 const player = {
   x: 0, y: 0,
-  r: 25,
-  speed: 195,
+  r: 16, // уменьшен радиус коллизии для честности
+  speed: 210,
   facingLeft: false
 };
 
@@ -64,7 +65,7 @@ function distance(a, b){ return Math.hypot(a.x - b.x, a.y - b.y); }
 function message(text){
   messageEl.textContent = text;
   messageEl.classList.add("show");
-  setTimeout(() => messageEl.classList.remove("show"), 1100);
+  setTimeout(() => messageEl.classList.remove("show"), 1200);
 }
 
 function createHeart(x, y){
@@ -88,18 +89,19 @@ function createCat(x, y, index){
   return {
     x, y,
     vx: 0, vy: 0,
-    r: 28,
+    r: 18, // маленький хитбокс котика
     el,
-    speed: 95 + index * 12, // чуть разная скорость (медленнее игрока)
-    type: index // 0 = прямой охотник, 1 = перехватчик на опережение, 2 = хитрый обходчик
+    speed: 65 + index * 8, // ОЧЕНЬ медленные котики (в 3 раза медленнее игрока)
+    wanderTarget: { x, y },
+    nextWanderTime: 0
   };
 }
 
-// === КРАСИВАЯ ГЕНЕРАЦИЯ СЕРДЕЧЕК (Сетка 3х4 с мягким смещением) ===
+// Красивое равномерное распределение сердечек по полянке
 function spawnBalancedHearts(w, h){
   const marginX = w * 0.12;
-  const marginTop = h * 0.16;   // отступ сверху под счетчики
-  const marginBottom = h * 0.18; // отступ снизу под джойстик
+  const marginTop = h * 0.15;
+  const marginBottom = h * 0.20;
 
   const usableW = w - marginX * 2;
   const usableH = h - marginTop - marginBottom;
@@ -111,16 +113,15 @@ function spawnBalancedHearts(w, h){
 
   for(let r = 0; r < rows; r++){
     for(let c = 0; c < cols; c++){
-      // Центр сектора + случайное смещение внутри него
       const centerX = marginX + (c + 0.5) * cellW;
       const centerY = marginTop + (r + 0.5) * cellH;
 
-      let x = centerX + random(-cellW * 0.3, cellW * 0.3);
-      let y = centerY + random(-cellH * 0.3, cellH * 0.3);
+      let x = centerX + random(-cellW * 0.28, cellW * 0.28);
+      let y = centerY + random(-cellH * 0.28, cellH * 0.28);
 
-      // Если сердечко попадает слишком близко к старту игрока — отодвигаем вверх
-      if(distance({x, y}, player) < 130){
-        y -= cellH * 0.6;
+      // Не спавнить под ногами на старте
+      if(distance({x, y}, player) < 120){
+        y -= cellH * 0.5;
       }
 
       hearts.push(createHeart(x, y));
@@ -148,14 +149,13 @@ function startGame(){
   player.facingLeft = false;
   setPlayer();
 
-  // Раскладываем сердечки по полянке
   spawnBalancedHearts(rect.width, rect.height);
 
-  // Котики появляются в верхней части экрана (подальше от игрока)
+  // Котики начинают вверху поляны
   const catSpawns = [
-    { x: rect.width * 0.20, y: rect.height * 0.24 },
+    { x: rect.width * 0.20, y: rect.height * 0.22 },
     { x: rect.width * 0.50, y: rect.height * 0.18 },
-    { x: rect.width * 0.80, y: rect.height * 0.24 }
+    { x: rect.width * 0.80, y: rect.height * 0.22 }
   ];
   cats = catSpawns.map((p, i) => createCat(p.x, p.y, i));
 
@@ -184,7 +184,8 @@ function hitByCat(){
   if(now < invulnerableUntil) return;
 
   lives--;
-  invulnerableUntil = now + 1400;
+  // 2 секунды полной безопасности после удара
+  invulnerableUntil = now + 2000;
   damageFlash.classList.remove("hit");
   void damageFlash.offsetWidth;
   damageFlash.classList.add("hit");
@@ -194,10 +195,10 @@ function hitByCat(){
 
   if(lives <= 0){
     gameRunning = false;
-    message("Котики поймали тебя... Начинаем заново!");
-    setTimeout(startGame, 900);
+    message("Котик замурчал тебя... Давай ещё разок ♡");
+    setTimeout(startGame, 1000);
   } else {
-    message("Ой! Котик тебя поймал!");
+    message("Ой! Котик потёрся о ножки");
     const rect = world.getBoundingClientRect();
     player.x = rect.width * 0.50;
     player.y = rect.height * 0.78;
@@ -205,113 +206,87 @@ function hitByCat(){
   }
 }
 
-// === УМНЫЙ ИИ ДЛЯ КОТИКОВ ===
-function updateCats(dt){
+// === ЛЕНИВЫЙ И МИЛЫЙ ИИ КОТИКОВ ===
+function updateCats(dt, now){
   const w = world.clientWidth;
   const h = world.clientHeight;
 
   cats.forEach(cat => {
-    let targetX = player.x;
-    let targetY = player.y;
+    const d = distance(cat, player);
+    let targetX, targetY;
 
-    // Кот 1: Охотник — бежит точно к игроку
-    if (cat.type === 0) {
+    // Котик обращает внимание на игрока ТОЛЬКО если подойти совсем близко (меньше 160px)
+    if (d < 160) {
       targetX = player.x;
       targetY = player.y;
-    }
-    // Кот 2: Перехватчик — прогнозирует движение игрока наперед
-    else if (cat.type === 1) {
-      const pLen = Math.hypot(input.x, input.y);
-      if (pLen > 0.1) {
-        // Вычисляем точку на 130px вперед по курсу игрока
-        targetX = player.x + (input.x / pLen) * 130;
-        targetY = player.y + (input.y / pLen) * 130;
+    } else {
+      // В остальное время котик неторопливо гуляет сам по себе
+      if (now > cat.nextWanderTime) {
+        cat.wanderTarget = {
+          x: random(w * 0.15, w * 0.85),
+          y: random(h * 0.18, h * 0.75)
+        };
+        cat.nextWanderTime = now + random(2500, 5000); // меняет направление раз в 3-5 сек
       }
-    }
-    // Кот 3: Хитрый обходчик — заходит с фланга по дуге
-    else if (cat.type === 2) {
-      const d = distance(cat, player);
-      if (d < 240) {
-        // Обходной вектор (перпендикулярно прямой на игрока)
-        const perpX = -(player.y - cat.y);
-        const perpY = (player.x - cat.x);
-        const perpLen = Math.hypot(perpX, perpY) || 1;
-        targetX = player.x + (perpX / perpLen) * 90;
-        targetY = player.y + (perpY / perpLen) * 90;
-      }
+      targetX = cat.wanderTarget.x;
+      targetY = cat.wanderTarget.y;
     }
 
-    // Вектор к цели
     const dx = targetX - cat.x;
     const dy = targetY - cat.y;
     const len = Math.hypot(dx, dy) || 1;
+
     let desiredVx = (dx / len) * cat.speed;
     let desiredVy = (dy / len) * cat.speed;
 
-    // Анти-слипание (котики расталкивают друг друга)
-    let repulseX = 0;
-    let repulseY = 0;
-    cats.forEach(other => {
-      if (other === cat) return;
-      const d = distance(cat, other);
-      if (d < 60 && d > 0) {
-        const force = (60 - d) / 60;
-        repulseX += ((cat.x - other.x) / d) * force * 100;
-        repulseY += ((cat.y - other.y) / d) * force * 100;
-      }
-    });
-
-    // Плавное руление (инерция)
-    cat.vx += (desiredVx + repulseX - cat.vx) * Math.min(dt * 4.5, 1);
-    cat.vy += (desiredVy + repulseY - cat.vy) * Math.min(dt * 4.5, 1);
+    // Плавное медленное движение
+    cat.vx += (desiredVx - cat.vx) * Math.min(dt * 3, 1);
+    cat.vy += (desiredVy - cat.vy) * Math.min(dt * 3, 1);
 
     cat.x += cat.vx * dt;
     cat.y += cat.vy * dt;
 
-    // Ограничение границами поля
-    cat.x = clamp(cat.x, 35, w - 35);
-    cat.y = clamp(cat.y, 80, h - 55);
+    cat.x = clamp(cat.x, 30, w - 30);
+    cat.y = clamp(cat.y, 80, h - 50);
 
     cat.el.style.left = cat.x + "px";
     cat.el.style.top = cat.y + "px";
 
-    // Поворот спрайта котика в сторону бега
-    if (Math.abs(cat.vx) > 5) {
+    // Поворот взгляда котика
+    if (Math.abs(cat.vx) > 3) {
       cat.el.querySelector("img").style.transform = `scaleX(${cat.vx < 0 ? -1 : 1})`;
     }
 
-    // Проверка пойман ли игрок
-    if (distance(cat, player) < cat.r + player.r) {
+    // Проверка столкновения (только при явном касании)
+    if (d < cat.r + player.r) {
       hitByCat();
     }
   });
 }
 
-// === СВОБОДНОЕ ПЕРЕМЕЩЕНИЕ ИГРОКА ===
+// === УПРАВЛЕНИЕ ИГРОКОМ ===
 function updatePlayer(dt){
   if(!input.x && !input.y) return;
 
   const len = Math.hypot(input.x, input.y) || 1;
-  const moveX = (input.x / len) * player.speed * dt;
-  const moveY = (input.y / len) * player.speed * dt;
-
-  player.x += moveX;
-  player.y += moveY;
+  player.x += (input.x / len) * player.speed * dt;
+  player.y += (input.y / len) * player.speed * dt;
 
   if (input.x < -0.1) player.facingLeft = true;
   if (input.x > 0.1) player.facingLeft = false;
 
   const w = world.clientWidth;
   const h = world.clientHeight;
-  player.x = clamp(player.x, 35, w - 35);
-  player.y = clamp(player.y, 90, h - 50);
+  player.x = clamp(player.x, 30, w - 30);
+  player.y = clamp(player.y, 80, h - 45);
 
   setPlayer();
 }
 
 function checkHearts(){
   for(let i = hearts.length - 1; i >= 0; i--){
-    if(distance(player, hearts[i]) < player.r + hearts[i].r){
+    // Сердечки собираются легко и с запасом
+    if(distance(player, hearts[i]) < player.r + hearts[i].r + 10){
       collectHeart(i);
     }
   }
@@ -324,19 +299,19 @@ function loop(t){
 
   updatePlayer(dt);
   checkHearts();
-  updateCats(dt);
+  updateCats(dt, t);
 
   requestAnimationFrame(loop);
 }
 
-// === УПРАВЛЕНИЕ ДЖОЙСТИКОМ И КЛАВИАТУРОЙ ===
+// === ДЖОЙСТИК И КНОПКИ ===
 function setJoystick(clientX, clientY){
   const r = joystick.getBoundingClientRect();
   const cx = r.left + r.width / 2;
   const cy = r.top + r.height / 2;
   let dx = clientX - cx;
   let dy = clientY - cy;
-  const max = r.width * 0.34;
+  const max = r.width * 0.35;
   const len = Math.hypot(dx, dy);
 
   if (len > max) {
