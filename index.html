@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#ffd8e6">
+  <title>Для тебя</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+    <section id="startScreen" class="screen active">
+      <div class="start-card">
+        <div class="envelope">♡</div>
+        <div class="eyebrow">МАЛЕНЬКИЙ КВЕСТ ДЛЯ ТЕБЯ</div>
+        <h1>Для самой любимой</h1>
+        <p>Я спрятал здесь несколько маленьких сердечек.</p>
+        <p>Пройди по тропинкам, собери их все и принеси туда, где их ждут.</p>
+        <button id="startBtn">Начать путешествие</button>
+        <small>И да... котики будут пытаться тебя поймать.</small>
+      </div>
+    </section>
+
+    <section id="gameScreen" class="screen">
+      <div id="world">
+        <!-- Фон-картинка карты -->
+        <img src="assets/map.png" id="mapBg" alt="Карта">
+
+        <div id="heartsLayer"></div>
+        <div id="catsLayer"></div>
+        <div id="player" class="player">
+          <img src="assets/player.png" alt="Персонаж">
+          <div class="shadow"></div>
+        </div>
+        <div id="box" class="box hidden">
+          <img src="assets/box.png" alt="Коробочка">
+        </div>
+      </div>
+
+      <div class="hud">
+        <div class="counter"><span id="heartCount">0</span> / <span id="heartTotal">12</span></div>
+        <div class="lives" id="lives">♡ ♡ ♡</div>
+        <div class="hint">Собери все сердечки</div>
+      </div>
+
+      <div id="message" class="game-message"></div>
+
+      <div id="joystick" class="joystick">
+        <div class="joystick-knob"></div>
+      </div>
+
+      <div class="controls-note">Веди пальцем по джойстику, чтобы идти по тропинкам</div>
+    </section>
+
+    <section id="boxScreen" class="screen">
+      <div class="box-card">
+        <div class="box-big"><img src="assets/box.png" alt=""></div>
+        <h2>Ты собрала их все</h2>
+        <p>Теперь отнеси сердечки к коробочке.</p>
+        <button id="openBoxBtn">Положить сердечки</button>
+      </div>
+    </section>
+
+    <section id="letterScreen" class="screen">
+      <div class="letter-card">
+        <div class="letter-hearts">♡  ♥  ♡</div>
+        <div class="eyebrow">ДЛЯ ТЕБЯ</div>
+        <h2>Есть одна вещь,<br>которую я хочу сказать</h2>
+        <p>Эти сердечки - лишь совсем маленькая часть той любви, которую я к тебе чувствую.</p>
+        <p>Её невозможно собрать в одной коробке, невозможно пересчитать и невозможно измерить даже самым большим количеством сердечек.</p>
+        <p>Мне правда очень жаль, что я тебя обидел. Я не хочу оправдываться. Просто хочу, чтобы ты знала, насколько ты мне дорога.</p>
+        <p class="sorry">Прости меня.</p>
+        <p class="love">Я тебя очень люблю.</p>
+        <div class="signature">с любовью Максимка ♡</div>
+      </div>
+    </section>
+
+    <div id="damageFlash"></div>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
